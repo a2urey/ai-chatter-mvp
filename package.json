@@ -1,0 +1,12 @@
+{
+  "name": "ai-chatter-kol-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs",
+    "eval": "node scripts/eval/run-eval.mjs",
+    "eval:review": "node scripts/eval/review-eval.mjs"
+  }
+}

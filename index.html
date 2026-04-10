@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KOL Twin Chat MVP</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div class="background-glow background-glow-a" aria-hidden="true"></div>
+    <div class="background-glow background-glow-b" aria-hidden="true"></div>
+
+    <main id="app" class="phone-shell reveal">
+      <section class="hero-section">
+        <img id="kolPhoto" class="hero-photo" alt="KOL portrait" />
+        <div class="hero-overlay"></div>
+        <div class="hero-meta">
+          <p id="kolName" class="hero-name"></p>
+          <p id="kolTagline" class="hero-tagline"></p>
+        </div>
+        <button id="topUnlockButton" class="hero-unlock-button" type="button">+ Unlock my WhatsApp</button>
+      </section>
+
+      <section class="chat-section">
+        <div id="chatLog" class="chat-log" role="log" aria-live="polite"></div>
+        <div id="ctaZone" class="cta-zone" aria-live="polite"></div>
+
+        <div id="emojiQuickKeys" class="emoji-quick-keys" aria-label="Emoji quick keys">
+          <button type="button" data-emoji="🙂">🙂</button>
+          <button type="button" data-emoji="😂">😂</button>
+          <button type="button" data-emoji="🙏">🙏</button>
+          <button type="button" data-emoji="💙">💙</button>
+          <button type="button" data-emoji="😘">😘</button>
+        </div>
+
+        <form id="composer" class="composer">
+          <label for="chatInput" class="sr-only">Your message</label>
+          <input id="chatInput" maxlength="280" placeholder="Message..." required />
+          <button id="sendButton" type="submit" aria-label="Send">➤</button>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE2D1"/>
+      <stop offset="1" stop-color="#EFD2FF"/>
+    </linearGradient>
+    <radialGradient id="face" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(630 430) rotate(90) scale(290 230)">
+      <stop stop-color="#FFDCCA"/>
+      <stop offset="1" stop-color="#F7BFA6"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <circle cx="760" cy="250" r="320" fill="#9F7AEA" fill-opacity=".22"/>
+  <circle cx="340" cy="640" r="260" fill="#60A5FA" fill-opacity=".2"/>
+  <path d="M250 900C360 620 860 560 990 900H250Z" fill="#2B2D42" fill-opacity=".25"/>
+  <ellipse cx="620" cy="470" rx="220" ry="260" fill="url(#face)"/>
+  <ellipse cx="530" cy="430" rx="26" ry="19" fill="#5B3A2B"/>
+  <ellipse cx="710" cy="430" rx="26" ry="19" fill="#5B3A2B"/>
+  <path d="M560 560C590 585 650 585 680 560" stroke="#E26D5A" stroke-width="14" stroke-linecap="round"/>
+  <path d="M400 350C450 220 780 220 840 350" stroke="#6D3B2D" stroke-width="58" stroke-linecap="round"/>
+  <text x="600" y="830" text-anchor="middle" fill="#1F2937" fill-opacity=".76" font-family="Arial, sans-serif" font-size="48" font-weight="700">Replace with your KOL photo</text>
+</svg>
