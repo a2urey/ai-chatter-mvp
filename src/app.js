@@ -62,12 +62,6 @@ function appendMessageToLog(message) {
   const row = document.createElement("article");
   row.className = `message-row message-row-${message.role}`;
 
-  if (message.role === "kol") {
-    const avatar = document.createElement("span");
-    avatar.className = "avatar-dot";
-    row.appendChild(avatar);
-  }
-
   const bubble = document.createElement("div");
   bubble.className = `bubble bubble-${message.role}`;
   bubble.innerHTML = `
@@ -85,8 +79,11 @@ function renderTypingIndicator() {
   row.className = "message-row message-row-kol";
   row.dataset.typing = "true";
   row.innerHTML = `
-    <span class="avatar-dot"></span>
-    <div class="bubble bubble-kol"><p>...</p></div>
+    <div class="bubble bubble-kol bubble-typing" aria-label="${safeText(campaignConfig.kol.name)} is typing">
+      <div class="typing-dots" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
   `;
   refs.chatLog.appendChild(row);
   refs.chatLog.scrollTop = refs.chatLog.scrollHeight;

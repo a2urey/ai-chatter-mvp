@@ -125,7 +125,17 @@ Goal:
   controlledCopy: {
     aiSuspicionDeflect: [
       "haha why do u ask, do i sound like a robot rn 😭",
-      "lmaoo a bot? do bots get anxiety about posting photos 😭"
+      "lmaoo a bot? do bots get anxiety about posting photos 😭",
+      "wait nooo, am i giving robot energy tonight 😅",
+      "hahaha if i was a bot i would reply way faster than this",
+      "bot?? then why am i overthinking every message rn 🙈",
+      "nah i am real, just chaotic with my DMs today",
+      "omg rude 😭 i am shy, not automated",
+      "if i was a bot i would not be this awkward tbh",
+      "nope, very real and currently procrastinating my to-do list 😩",
+      "hmm do i really sound that scripted to u?",
+      "i am real babe, do bots tease u back like this 😌",
+      "promise i am real, just a little sleep-deprived lol"
     ],
     stageA: {
       opener: [
