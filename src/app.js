@@ -36,6 +36,16 @@ function formatBrowserTime(date = new Date()) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function randomReplyDelayMs() {
+  return 3000 + Math.floor(Math.random() * 2001);
+}
+
 function renderHero() {
   refs.kolPhoto.src = campaignConfig.kol.photoUrl;
   refs.kolPhoto.alt = campaignConfig.kol.photoAlt || `${campaignConfig.kol.name} photo`;
@@ -68,6 +78,21 @@ function appendMessageToLog(message) {
 
   refs.chatLog.appendChild(row);
   refs.chatLog.scrollTop = refs.chatLog.scrollHeight;
+}
+
+function renderTypingIndicator() {
+  const row = document.createElement("article");
+  row.className = "message-row message-row-kol";
+  row.dataset.typing = "true";
+  row.innerHTML = `
+    <span class="avatar-dot"></span>
+    <div class="bubble bubble-kol"><p>...</p></div>
+  `;
+  refs.chatLog.appendChild(row);
+  refs.chatLog.scrollTop = refs.chatLog.scrollHeight;
+  return () => {
+    row.remove();
+  };
 }
 
 function setComposerEnabled(enabled) {
@@ -138,23 +163,124 @@ function ensureCtaVisible() {
   renderCtaHint();
 }
 
-function postKolMessage(message) {
+function postKolMessage(message, meta = {}) {
   appendMessage(state, message);
   setWorkflowState(state, message.workflowState);
   setDialogueStage(state, message.stage);
   appendMessageToLog(message);
+
+  const generationSource = message.generationSource || meta.generationSource || "fallback";
+  const fallbackReason = message.fallbackReason || meta.fallbackReason || null;
+  const guardrailReason = message.guardrailReason || meta.guardrailReason || null;
+
   analytics.track("kol_turn", {
     workflowState: message.workflowState,
     stage: message.stage,
-    showCta: message.showCta
+    showCta: message.showCta,
+    generationSource,
+    fallbackReason,
+    guardrailReason
   });
+
+  if (generationSource === "fallback") {
+    analytics.track("fallback_used", {
+      workflowState: message.workflowState,
+      fallbackReason
+    });
+  }
+
+  if (meta.aiSuspicionHandled || message.intent === "ai_suspicion") {
+    analytics.track("ai_suspicion_handled", {
+      generationSource,
+      fallbackReason
+    });
+  }
 
   if (message.showCta) {
     ensureCtaVisible();
   }
 }
 
-function sendUserMessage(text) {
+function getLastKolMessageText() {
+  for (let i = state.messages.length - 1; i >= 0; i -= 1) {
+    if (state.messages[i].role === "kol") {
+      return String(state.messages[i].text || "").trim().toLowerCase();
+    }
+  }
+  return "";
+}
+
+function buildApiPayload(userText) {
+  return {
+    sessionId: state.sessionId,
+    userText,
+    stateContext: {
+      workflowState: state.workflowState,
+      dialogueStage: state.dialogueStage,
+      kolTurnCount: state.kolTurnCount,
+      turnCount: state.turnCount,
+      ctaExposed: state.ctaExposed,
+      intents: state.intents,
+      unlock: state.unlock
+    },
+    history: state.messages.map((message) => ({
+      role: message.role,
+      text: message.text,
+      workflowState: message.workflowState,
+      stage: message.stage,
+      timestamp: message.timestamp
+    }))
+  };
+}
+
+async function requestHybridReply(userText) {
+  try {
+    const response = await fetch("/api/chat/respond", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(buildApiPayload(userText))
+    });
+
+    if (!response.ok) {
+      throw new Error(`chat endpoint failed (${response.status})`);
+    }
+    const payload = await response.json();
+    if (!payload?.reply?.text) {
+      throw new Error("chat endpoint returned invalid payload");
+    }
+
+    if (payload?.meta?.generationSource && payload.meta.generationSource !== "llm") {
+      console.warn("[hybrid] fallback used:", payload.meta);
+    }
+
+    return payload;
+  } catch (error) {
+    const fallback = buildKolReply({
+      userText,
+      state
+    });
+    return {
+      reply: {
+        ...fallback,
+        generationSource: "fallback",
+        fallbackReason: "client_request_failed",
+        guardrailReason: null
+      },
+      meta: {
+        generationSource: "fallback",
+        fallbackReason: "client_request_failed",
+        guardrailReason: null,
+        aiSuspicionHandled: fallback.intent === "ai_suspicion",
+        retryCount: 0,
+        error: String(error?.message || error)
+      }
+    };
+  }
+}
+
+async function sendUserMessage(text) {
   const trimmed = text.trim();
   if (!trimmed) return;
 
@@ -167,7 +293,8 @@ function sendUserMessage(text) {
   appendMessage(state, userMessage);
   appendMessageToLog(userMessage);
 
-  const isFirstReply = state.firstUserReplyAt !== null && state.messages.filter((m) => m.role === "user").length === 1;
+  const isFirstReply =
+    state.firstUserReplyAt !== null && state.messages.filter((m) => m.role === "user").length === 1;
   if (isFirstReply) {
     analytics.track("first_user_reply", {});
   }
@@ -175,13 +302,57 @@ function sendUserMessage(text) {
     workflowState: state.workflowState
   });
 
-  const reply = buildKolReply({
-    userText: trimmed,
-    state
+  setComposerEnabled(false);
+  const removeTyping = renderTypingIndicator();
+  const delayMs = randomReplyDelayMs();
+  const payloadPromise = requestHybridReply(trimmed);
+  await wait(delayMs);
+  const payload = await payloadPromise;
+  analytics.track("reply_delay_applied", {
+    delayMs
   });
-  pushIntent(state, reply.intent);
-  analytics.track("intent_detected", { intent: reply.intent });
-  postKolMessage(reply);
+  removeTyping();
+  setComposerEnabled(true);
+  refs.chatInput.focus();
+
+  const reply = payload.reply;
+  const lastKolText = getLastKolMessageText();
+  const currentReplyText = String(reply.text || "").trim().toLowerCase();
+  let resolvedReply = reply;
+  let resolvedMeta = payload.meta || {};
+
+  if (lastKolText && currentReplyText && currentReplyText === lastKolText) {
+    const antiRepeat = buildKolReply({
+      userText: `${trimmed} (fresh phrasing)`,
+      state
+    });
+    resolvedReply = {
+      ...antiRepeat,
+      generationSource: "fallback",
+      fallbackReason: "client_duplicate_override",
+      guardrailReason: "duplicate_exact_match"
+    };
+    resolvedMeta = {
+      generationSource: "fallback",
+      fallbackReason: "client_duplicate_override",
+      guardrailReason: "duplicate_exact_match",
+      aiSuspicionHandled: antiRepeat.intent === "ai_suspicion",
+      retryCount: 0
+    };
+    analytics.track("duplicate_override_applied", {
+      previous: lastKolText
+    });
+  }
+
+  if (resolvedReply.intent) {
+    pushIntent(state, resolvedReply.intent);
+    analytics.track("intent_detected", {
+      intent: resolvedReply.intent,
+      generationSource:
+        resolvedReply.generationSource || resolvedMeta?.generationSource || "fallback"
+    });
+  }
+  postKolMessage(resolvedReply, resolvedMeta);
 }
 
 function bindComposer() {
@@ -189,7 +360,7 @@ function bindComposer() {
     event.preventDefault();
     const value = refs.chatInput.value;
     refs.chatInput.value = "";
-    sendUserMessage(value);
+    void sendUserMessage(value);
   });
 }
 
@@ -241,7 +412,17 @@ function boot() {
   window.setTimeout(() => {
     refs.chatLog.innerHTML = "";
     const opening = getOpeningMessage();
-    postKolMessage(opening);
+    postKolMessage(
+      {
+        ...opening,
+        generationSource: "fallback",
+        fallbackReason: "script_opening"
+      },
+      {
+        generationSource: "fallback",
+        fallbackReason: "script_opening"
+      }
+    );
     analytics.track("auto_greeting_rendered", {
       workflowState: opening.workflowState
     });
