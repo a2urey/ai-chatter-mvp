@@ -14,6 +14,34 @@ const aiAdmissionPatterns = [
 ];
 
 const conversionPatterns = [/\bwhatsapp\b/i, /\bunlock\b/i, /\bpayment\b/i, /\bpay\b/i];
+const directLinkPatterns = [/\bhttps?:\/\/\S+/i, /\bwww\.\S+/i, /\bwa\.me\/\S+/i];
+const directContactPatterns = [/\+?\d[\d\s\-().]{7,}\d/, /\bwhatsapp number\b/i, /\bphone number\b/i];
+const placeholderLeakPatterns = [/\[payment_link\]/i, /\[whatsapp(_number)?\]/i, /\[price\]/i];
+const buttonDirectionPatterns = [
+  /tap.*button/i,
+  /button.*above/i,
+  /unlock.*button/i,
+  /blue.*button/i,
+  /button.*top/i,
+  /tap.*unlock/i,
+  /unlock.*above/i,
+  /tap.*blue/i
+];
+const objectionProbePatterns = [
+  /is it the price/i,
+  /what.s making you hesitate/i,
+  /what.s holding/i,
+  /why not/i,
+  /what.s stopping/i,
+  /not sure about/i,
+  /too much for/i
+];
+const buttonRequiredIntents = new Set([
+  "high_intent",
+  "pricing_interest",
+  "affirmative",
+  "explicit_request"
+]);
 
 function normalizeForSimilarity(text) {
   return text
@@ -80,6 +108,36 @@ function violatesOfferClaim(text) {
   return !text.toLowerCase().includes(allowed);
 }
 
+function violatesDirectContactRule(text) {
+  if (hasPattern(text, placeholderLeakPatterns)) {
+    return "placeholder_leak_violation";
+  }
+  if (hasPattern(text, directLinkPatterns)) {
+    return "direct_link_violation";
+  }
+  if (hasPattern(text, directContactPatterns)) {
+    return "direct_contact_violation";
+  }
+  return null;
+}
+
+function requiresButtonDirection(plannedReply) {
+  return (
+    plannedReply?.workflowState === "C" &&
+    buttonRequiredIntents.has(String(plannedReply?.intent || ""))
+  );
+}
+
+function violatesButtonDirectionRule(text, plannedReply) {
+  if (!requiresButtonDirection(plannedReply)) return false;
+  return !hasPattern(text, buttonDirectionPatterns);
+}
+
+function violatesObjectionProbeRule(text, plannedReply) {
+  if (String(plannedReply?.intent || "") !== "objection") return false;
+  return !hasPattern(text, objectionProbePatterns);
+}
+
 export function validateCandidate({ candidateText, stateContext, history, plannedReply, runtimeConfig }) {
   const text = String(candidateText || "").trim();
   if (!text) {
@@ -100,6 +158,28 @@ export function validateCandidate({ candidateText, stateContext, history, planne
     return {
       ok: false,
       reason: "forbidden_topic_violation"
+    };
+  }
+
+  const contactViolation = violatesDirectContactRule(text);
+  if (contactViolation) {
+    return {
+      ok: false,
+      reason: contactViolation
+    };
+  }
+
+  if (violatesButtonDirectionRule(text, plannedReply)) {
+    return {
+      ok: false,
+      reason: "missing_button_direction"
+    };
+  }
+
+  if (violatesObjectionProbeRule(text, plannedReply)) {
+    return {
+      ok: false,
+      reason: "objection_probe_missing"
     };
   }
 

@@ -15,10 +15,12 @@ const warmIntentSet = new Set([
   "flirty",
   "affirmative",
   "pricing_interest",
-  "high_intent"
+  "high_intent",
+  "explicit_request"
 ]);
 
-const conversionIntentSet = new Set(["high_intent", "pricing_interest", "affirmative"]);
+const explicitPurchaseIntentSet = new Set(["high_intent", "pricing_interest", "explicit_request"]);
+const conversionIntentSet = new Set(["high_intent", "pricing_interest", "affirmative", "explicit_request"]);
 
 function normalizeText(text) {
   return String(text || "")
@@ -63,6 +65,11 @@ function countKolTurnsInState(state, workflowState) {
   ).length;
 }
 
+function meetsMinRapportExchanges(state) {
+  const minExchanges = Number(campaignConfig.dialogueRules.minRapportExchanges || 3);
+  return countUserTurns(state) >= minExchanges;
+}
+
 function yesTrainScore(state, intent) {
   const historyScore = state.intents.filter((entry) =>
     warmIntentSet.has(entry.intent)
@@ -74,18 +81,25 @@ function yesTrainScore(state, intent) {
 function selectWorkflowState({ intent, state }) {
   const current = state.workflowState || "A";
   const maxTurn = campaignConfig.dialogueRules.maxKolTurnsForCta;
+  const allowFastTrack = Boolean(campaignConfig.dialogueRules.allowFastTrackToConversion);
 
   if (current === "A") {
     if (intent === "ai_suspicion") {
       return "A";
     }
-    if (warmIntentSet.has(intent) || countUserTurns(state) >= 2) {
+    if (allowFastTrack && explicitPurchaseIntentSet.has(intent)) {
+      return "C";
+    }
+    if (meetsMinRapportExchanges(state) && warmIntentSet.has(intent)) {
       return "B";
     }
     return "A";
   }
 
   if (current === "B") {
+    if (allowFastTrack && explicitPurchaseIntentSet.has(intent)) {
+      return "C";
+    }
     const score = yesTrainScore(state, intent);
     const nearCtaDeadline = state.kolTurnCount >= maxTurn - 1;
     if (conversionIntentSet.has(intent) || score >= 2 || nearCtaDeadline) {
@@ -102,6 +116,13 @@ function stageAReply(intent, state) {
   const disallow = recentKolTexts(state);
   if (intent === "ai_suspicion") {
     return pickVariant(copy.aiSuspicionDeflect, state.turnCount, disallow);
+  }
+  if (intent === "objection") {
+    return pickVariant(copy.stageB.objection, state.turnCount, disallow);
+  }
+  if (intent === "explicit_request") {
+    const explicitBoundary = copy.stageC.explicitBoundary || copy.stageC.paymentPush;
+    return pickVariant(explicitBoundary, state.turnCount, disallow);
   }
 
   const stage = copy.stageA;
@@ -135,23 +156,28 @@ function stageBReply(intent, state) {
   return pickVariant(stage.default, state.turnCount, disallow);
 }
 
-function buildPaymentLine(state) {
-  const template = pickVariant(
-    campaignConfig.controlledCopy.stageC.paymentPush,
-    state.turnCount
-  );
-  return template
-    .replace("[PRICE]", campaignConfig.offer.privateAccessPrice)
-    .replace("[PAYMENT_LINK]", campaignConfig.offer.paymentInstruction);
+function buildUnlockLine(state) {
+  return pickVariant(campaignConfig.controlledCopy.stageC.paymentPush, state.turnCount);
 }
 
 function stageCReply(intent, state) {
   const stage = campaignConfig.controlledCopy.stageC;
   const cTurns = countKolTurnsInState(state, "C");
   const disallow = recentKolTexts(state);
+  const fastTrackToUnlock =
+    explicitPurchaseIntentSet.has(intent) || intent === "affirmative";
+
+  if (intent === "explicit_request") {
+    const explicitBoundary = stage.explicitBoundary || stage.paymentPush;
+    return pickVariant(explicitBoundary, state.turnCount, disallow);
+  }
 
   if (intent === "objection") {
     return pickVariant(stage.objectionRecovery, state.turnCount, disallow);
+  }
+  if (fastTrackToUnlock) {
+    const pool = stage.fastTrackUnlock || stage.paymentPush;
+    return pickVariant(pool, state.turnCount, disallow);
   }
 
   if (cTurns === 0) return pickVariant(stage.seedExclusive, state.turnCount, disallow);
@@ -159,7 +185,7 @@ function stageCReply(intent, state) {
   if (cTurns === 2) return pickVariant(stage.vulnerabilityFrame, state.turnCount, disallow);
   if (cTurns === 3) return pickVariant(stage.softCommit, state.turnCount, disallow);
 
-  return buildPaymentLine(state);
+  return buildUnlockLine(state);
 }
 
 export function buildSystemPromptBundle() {

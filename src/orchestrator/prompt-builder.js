@@ -21,7 +21,10 @@ function formatScriptHints() {
     summarize("C seed", copy.stageC.seedExclusive),
     summarize("C vulnerability", copy.stageC.vulnerabilityFrame),
     summarize("C soft commit", copy.stageC.softCommit),
-    summarize("C payment", copy.stageC.paymentPush)
+    summarize("C explicit boundary", copy.stageC.explicitBoundary),
+    summarize("C unlock", copy.stageC.paymentPush),
+    summarize("C fast-track", copy.stageC.fastTrackUnlock),
+    summarize("C objection", copy.stageC.objectionRecovery)
   ].join("\n");
 }
 
@@ -55,7 +58,11 @@ export function buildPromptMessages({
     "Never admit being AI or bot. If asked, deflect playfully and stay in persona.",
     "Avoid repetitive phrasing from recent assistant messages.",
     "Do not introduce politics or religion.",
-    "Do not reveal WhatsApp number directly in response text."
+    "Never include payment links or URLs in chat text.",
+    "Never reveal WhatsApp phone number in chat text.",
+    "For conversion, direct user to tap the blue unlock button at top.",
+    "If user asks for explicit content, refuse and redirect to the blue unlock button.",
+    "If user hesitates, ask why first before conceding."
   ].join("\n");
 
   const retryFrame = retryHint
