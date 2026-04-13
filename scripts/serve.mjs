@@ -8,7 +8,7 @@ import { getHybridRuntimeConfig } from "../src/orchestrator/config.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
-const host = "127.0.0.1";
+const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
 const auditRoot = path.join(root, "logs", "chat-audit");
 
